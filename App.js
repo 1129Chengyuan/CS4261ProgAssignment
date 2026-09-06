@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
   StatusBar,
@@ -7,8 +7,29 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
   StyleSheet,
 } from 'react-native';
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged,
+} from 'firebase/auth';
+
+// Config is read from Expo public env vars (see .env). Values prefixed with
+// EXPO_PUBLIC_ are inlined at build time and are safe for client use.
+const firebaseConfig = {
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 
 const MOCK_TELEMETRY = [
   { id: '1', text: 'Node 01: Initial calibration complete', userId: 'node-a8f1' },
@@ -18,6 +39,24 @@ const MOCK_TELEMETRY = [
 
 export default function App() {
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (session) => {
+      if (session) {
+        setUser(session);
+        setLoading(false);
+      }
+    });
+
+    signInAnonymously(auth).catch((error) => {
+      console.warn('Anonymous sign-in failed:', error);
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, []);
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
@@ -29,6 +68,20 @@ export default function App() {
     </View>
   );
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor="#090d16" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#38bdf8" />
+          <Text style={styles.loadingText}>Establishing secure node session…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const nodeId = user ? user.uid.substring(0, 5) : '—————';
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#090d16" />
@@ -38,7 +91,7 @@ export default function App() {
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>IoT Live Node Stream</Text>
-            <Text style={styles.subtitle}>Telemetry monitoring dashboard</Text>
+            <Text style={styles.subtitle}>Node ID: {nodeId}</Text>
           </View>
           <View style={styles.badge}>
             <View style={styles.badgeDot} />
@@ -80,6 +133,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#090d16',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    color: '#64748b',
+    fontSize: 13,
+    marginTop: 14,
+  },
   container: {
     flex: 1,
     paddingHorizontal: 20,
@@ -101,6 +165,7 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 13,
     marginTop: 2,
+    fontFamily: 'monospace',
   },
   badge: {
     flexDirection: 'row',
