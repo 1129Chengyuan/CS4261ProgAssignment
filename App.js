@@ -16,6 +16,15 @@ import {
   signInAnonymously,
   onAuthStateChanged,
 } from 'firebase/auth';
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 // Config is read from Expo public env vars (see .env). Values prefixed with
 // EXPO_PUBLIC_ are inlined at build time and are safe for client use.
@@ -30,17 +39,13 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-
-const MOCK_TELEMETRY = [
-  { id: '1', text: 'Node 01: Initial calibration complete', userId: 'node-a8f1' },
-  { id: '2', text: 'Node 02: Ambient temp 21.4°C, humidity 47%', userId: 'node-b3c9' },
-  { id: '3', text: 'Node 03: Heartbeat OK, signal strength -58 dBm', userId: 'node-c7d2' },
-];
+const db = getFirestore(app);
 
 export default function App() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [telemetry, setTelemetry] = useState([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (session) => {
@@ -57,6 +62,36 @@ export default function App() {
 
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    const telemetryQuery = query(
+      collection(db, 'telemetry'),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(telemetryQuery, (snapshot) => {
+      setTelemetry(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const handlePublish = async () => {
+    if (!message.trim() || !user) return;
+
+    const text = message.trim();
+    setMessage('');
+
+    try {
+      await addDoc(collection(db, 'telemetry'), {
+        text,
+        userId: user.uid.substring(0, 5),
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.warn('Publish failed:', error);
+    }
+  };
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
@@ -109,7 +144,11 @@ export default function App() {
             placeholder="Enter node message..."
             placeholderTextColor="#4b5563"
           />
-          <TouchableOpacity style={styles.button} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.button}
+            activeOpacity={0.8}
+            onPress={handlePublish}
+          >
             <Text style={styles.buttonText}>Publish</Text>
           </TouchableOpacity>
         </View>
@@ -117,7 +156,7 @@ export default function App() {
         {/* Stream */}
         <Text style={styles.streamLabel}>Incoming Stream</Text>
         <FlatList
-          data={MOCK_TELEMETRY}
+          data={telemetry}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
