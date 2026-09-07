@@ -1,337 +1,273 @@
-  import React, { useState, useEffect } from 'react';
-  import {
-    SafeAreaView,
-    StatusBar,
-    View,
-    Text,                                                             
-    TextInput,                                                                                    
-    TouchableOpacity,
-    FlatList,
-    ActivityIndicator,
-    StyleSheet,
-  } from 'react-native';
-  import { initializeApp } from 'firebase/app';
-  import {
-    getAuth,
-    signInAnonymously,
-    onAuthStateChanged,                                               
-  } from 'firebase/auth';                                                                         
-  import {
-    getFirestore,
-    collection,
-    addDoc,
-    query,
-    orderBy,
-    onSnapshot,
-    serverTimestamp,
-  } from 'firebase/firestore';
-                                                                      
-  // Config is read from Expo public env vars (see .env). Values prefixed with                    
-  // EXPO_PUBLIC_ are inlined at build time and are safe for client use.
-  const firebaseConfig = {
-    apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-  };
-  
-  const app = initializeApp(firebaseConfig);                          
-  const auth = getAuth(app);
-  const db = getFirestore(app);
+import React, { useState, useEffect } from 'react';
+import {
+  SafeAreaView,
+  StatusBar,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  StyleSheet,
+} from 'react-native';
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged,
+} from 'firebase/auth';
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from 'firebase/firestore';
 
-  export default function App() {
-    const [message, setMessage] = useState('');                       
-    const [loading, setLoading] = useState(true);                                                 
-    const [user, setUser] = useState(null);
-    const [telemetry, setTelemetry] = useState([]);
+// Config is read from Expo public env vars (see .env). Values prefixed with
+// EXPO_PUBLIC_ are inlined at build time and are safe for client use.
+const firebaseConfig = {
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+};
 
-    const canPublish = message.trim().length > 0;
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-    useEffect(() => {
-      const unsubscribe = onAuthStateChanged(auth, (session) => {     
-        if (session) {                                                                            
-          setUser(session);
-          setLoading(false);
-        }
-      });
+export default function App() {
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [messages, setMessages] = useState([]);
 
-      signInAnonymously(auth).catch((error) => {
-        console.warn('Anonymous sign-in failed:', error);             
-        setLoading(false);                                                                        
-      });
+  const canPost = message.trim().length > 0;
 
-      return unsubscribe;
-    }, []);
-
-    useEffect(() => {
-      const telemetryQuery = query(
-        collection(db, 'telemetry'),
-        orderBy('createdAt', 'desc')
-      );
-                                                                      
-      const unsubscribe = onSnapshot(telemetryQuery, (snapshot) => {                              
-        setTelemetry(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-      });
-
-      return unsubscribe;
-    }, []);
-                                                                      
-    const handlePublish = async () => {                                                           
-      if (!message.trim() || !user) return;
-
-      const text = message.trim();
-      setMessage('');
-
-      try {
-        await addDoc(collection(db, 'telemetry'), {
-          text,
-          userId: user.uid.substring(0, 5),                           
-          createdAt: serverTimestamp(),                                                           
-        });
-      } catch (error) {
-        console.warn('Publish failed:', error);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (session) => {
+      if (session) {
+        setUser(session);
+        setLoading(false);
       }
-    };
+    });
 
-    const renderItem = ({ item }) => (
-      <View style={styles.card}>                                      
-        <View style={styles.cardHeader}>                                                          
-          <View style={styles.nodeDot} />
-          <Text style={styles.cardUser}>{item.userId}</Text>
-        </View>
-        <Text style={styles.cardText}>{item.text}</Text>
-      </View>
+    signInAnonymously(auth).catch((error) => {
+      console.warn('Anonymous sign-in failed:', error);
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const messagesQuery = query(
+      collection(db, 'telemetry'),
+      orderBy('createdAt', 'desc')
     );
-                                                                      
-    if (loading) {                                                                                
-      return (
-        <SafeAreaView style={styles.safeArea}>
-          <StatusBar barStyle="light-content" backgroundColor="#090d16" />
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#38bdf8" />
-            <Text style={styles.loadingText}>Establishing secure node session…</Text>
-          </View>
-        </SafeAreaView>                                               
-      );
-    }
 
-    const nodeId = user ? user.uid.substring(0, 5) : '—————';
-                                                                      
-    return (                                                                                      
+    const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+      setMessages(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const handlePost = async () => {
+    if (!message.trim() || !user) return;
+
+    const text = message.trim();
+    setMessage('');
+
+    try {
+      await addDoc(collection(db, 'telemetry'), {
+        text,
+        userId: user.uid.substring(0, 5),
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.warn('Post failed:', error);
+    }
+  };
+
+  const renderItem = ({ item }) => (
+    <View style={styles.card}>
+      <Text style={styles.cardUser}>{item.userId}</Text>
+      <Text style={styles.cardText}>{item.text}</Text>
+    </View>
+  );
+
+  if (loading) {
+    return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" backgroundColor="#090d16" />
-
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View>                                                    
-              <Text style={styles.title}>IoT Live Node Stream</Text>                              
-              <Text style={styles.subtitle}>Node ID: {nodeId}</Text>
-            </View>
-            <View style={styles.headerBadges}>
-              <View style={styles.countPill}>
-                <Text style={styles.countPillText}>{telemetry.length} events</Text>
-              </View>                                                 
-              <View style={styles.badge}>                                                         
-                <View style={styles.badgeDot} />
-                <Text style={styles.badgeText}>Live Sync</Text>
-              </View>
-            </View>
-          </View>
-                                                                      
-          {/* Input card */}                                                                      
-          <View style={styles.inputCard}>
-            <Text style={styles.inputLabel}>Publish Telemetry</Text>
-            <TextInput
-              style={styles.input}
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Enter node message..."                     
-              placeholderTextColor="#4b5563"                                                      
-            />
-            <TouchableOpacity
-              style={[styles.button, !canPublish && styles.buttonDisabled]}
-              activeOpacity={0.8}
-              onPress={handlePublish}
-              disabled={!canPublish}
-            >
-              <Text style={styles.buttonText}>Publish</Text>          
-            </TouchableOpacity>                                                                   
-          </View>
-
-          {/* Stream */}
-          <Text style={styles.streamLabel}>Incoming Stream</Text>
-          <FlatList                                                   
-            data={telemetry}                                                                      
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#38bdf8" />
         </View>
-      </SafeAreaView>                                                 
-    );                                                                                            
+      </SafeAreaView>
+    );
   }
 
-  const styles = StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: '#090d16',
-    },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',                                           
-      padding: 24,                                                                                
-    },
-    loadingText: {
-      color: '#64748b',
-      fontSize: 13,
-      marginTop: 14,
-    },
-    container: {
-      flex: 1,
-      paddingHorizontal: 20,                                          
-      paddingTop: 16,                                                                             
-    },
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 24,
-    },
-    headerBadges: {
-      flexDirection: 'row',
-      alignItems: 'center',                                           
-    },                                                                                            
-    title: {
-      color: '#f1f5f9',
-      fontSize: 22,
-      fontWeight: '700',
-      letterSpacing: 0.3,
-    },
-    subtitle: {
-      color: '#64748b',
-      fontSize: 13,                                                   
-      marginTop: 2,                                                                               
-      fontFamily: 'monospace',
-    },
-    countPill: {
-      borderColor: '#1e293b',
-      borderWidth: 1,
-      borderRadius: 999,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      marginRight: 8,                                                 
-    },                                                                                            
-    countPillText: {
-      color: '#60a5fa',
-      fontSize: 12,
-      fontWeight: '600',
-    },
-    badge: {
-      flexDirection: 'row',
-      alignItems: 'center',                                           
-      backgroundColor: 'rgba(59, 130, 246, 0.12)',                                                
-      borderColor: 'rgba(59, 130, 246, 0.35)',
-      borderWidth: 1,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-    },                                                                
-    badgeDot: {                                                                                   
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: '#3b82f6',
-      marginRight: 6,
-    },
-    badgeText: {
-      color: '#93c5fd',                                               
-      fontSize: 12,                                                                               
-      fontWeight: '600',
-    },
-    inputCard: {
-      backgroundColor: '#0f1626',
-      borderRadius: 16,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: '#1e293b',
-      marginBottom: 24,                                               
-    },                                                                                            
-    inputLabel: {
-      color: '#94a3b8',
-      fontSize: 13,
-      fontWeight: '600',
-      marginBottom: 10,
-    },
-    input: {
-      backgroundColor: '#090d16',                                     
-      borderRadius: 10,                                                                           
-      borderWidth: 1,
-      borderColor: '#1e293b',
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      color: '#e2e8f0',
-      fontSize: 15,
-      marginBottom: 12,
-    },                                                                
-    button: {                                                                                     
-      backgroundColor: '#2563eb',
-      borderRadius: 10,
-      paddingVertical: 13,
-      alignItems: 'center',
-    },
-    buttonDisabled: {
-      backgroundColor: '#1e3a8a',
-      opacity: 0.45,                                                  
-    },                                                                                            
-    buttonText: {
-      color: '#ffffff',
-      fontSize: 15,
-      fontWeight: '700',
-      letterSpacing: 0.3,
-    },
-    streamLabel: {
-      color: '#94a3b8',                                               
-      fontSize: 13,                                                                               
-      fontWeight: '600',
-      marginBottom: 12,
-    },
-    listContent: {
-      paddingBottom: 24,
-    },
-    card: {
-      backgroundColor: '#0f1626',
-      borderRadius: 14,                                               
-      padding: 16,                                                                                
-      borderWidth: 1,
-      borderColor: '#1e293b',
-      marginBottom: 12,
-    },
-    cardHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 8,
-    },                                                                
-    nodeDot: {                                                                                    
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: '#38bdf8',
-      marginRight: 8,
-    },
-    cardUser: {
-      color: '#60a5fa',
-      fontSize: 12,                                                   
-      fontWeight: '600',                                                                          
-      fontFamily: 'monospace',
-    },
-    cardText: {
-      color: '#cbd5e1',
-      fontSize: 15,
-      lineHeight: 21,
-    },
-  });
+  const nodeId = user ? user.uid.substring(0, 5) : '';
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#090d16" />
+
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>Message Board</Text>
+            <View style={styles.countPill}>
+              <Text style={styles.countPillText}>{messages.length} messages</Text>
+            </View>
+          </View>
+          <Text style={styles.subtitle}>Posting as {nodeId}</Text>
+        </View>
+
+        <View style={styles.inputCard}>
+          <TextInput
+            style={styles.input}
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Write a message"
+            placeholderTextColor="#4b5563"
+          />
+          <TouchableOpacity
+            style={[styles.button, !canPost && styles.buttonDisabled]}
+            activeOpacity={0.8}
+            onPress={handlePost}
+            disabled={!canPost}
+          >
+            <Text style={styles.buttonText}>Post</Text>
+          </TouchableOpacity>
+        </View>
+
+        <FlatList
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <Text style={styles.empty}>No messages yet.</Text>
+          }
+        />
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#090d16',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  header: {
+    marginBottom: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  title: {
+    color: '#f1f5f9',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  countPill: {
+    borderColor: '#1e293b',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  countPillText: {
+    color: '#60a5fa',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  subtitle: {
+    color: '#64748b',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  inputCard: {
+    backgroundColor: '#0f1626',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    marginBottom: 20,
+  },
+  input: {
+    backgroundColor: '#090d16',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#e2e8f0',
+    fontSize: 15,
+    marginBottom: 10,
+  },
+  button: {
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    backgroundColor: '#1e3a8a',
+    opacity: 0.45,
+  },
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  listContent: {
+    paddingBottom: 24,
+  },
+  empty: {
+    color: '#475569',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 32,
+  },
+  card: {
+    backgroundColor: '#0f1626',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    marginBottom: 10,
+  },
+  cardUser: {
+    color: '#60a5fa',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  cardText: {
+    color: '#cbd5e1',
+    fontSize: 15,
+    lineHeight: 21,
+  },
+});
