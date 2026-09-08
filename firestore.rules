@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Deny everything by default. Any path not explicitly matched below
+    // (and any operation not explicitly allowed) is rejected.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Append-only telemetry log.
+    match /telemetry/{messageId} {
+
+      // Any authenticated user (anonymous auth included) may read.
+      allow read: if request.auth != null;
+
+      // Create is allowed only for a well-formed payload from an
+      // authenticated user.
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['text', 'userId', 'createdAt'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.userId is string
+        && request.resource.data.createdAt == request.time;
+
+      // Existing documents are immutable.
+      allow update, delete: if false;
+    }
+  }
+}
