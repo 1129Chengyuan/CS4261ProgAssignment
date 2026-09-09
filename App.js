@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   SafeAreaView,
   StatusBar,
@@ -83,6 +84,7 @@ export default function App() {
 
     const text = message.trim();
     setMessage('');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       await addDoc(collection(db, 'telemetry'), {
